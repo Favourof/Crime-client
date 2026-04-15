@@ -1,14 +1,4 @@
-﻿import type { Config } from 'tailwindcss';
-
-const config: Config = {
-  content: [
-    './src/app/**/*.{ts,tsx}',
-    './src/components/**/*.{ts,tsx}',
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
+﻿/** @type {import('tailwindcss').Config} */
+export default {
+  content: ["./src/**/*.{ts,tsx}"],
 };
-
-export default config;
