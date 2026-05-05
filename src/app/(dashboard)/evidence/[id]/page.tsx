@@ -18,6 +18,78 @@ import type { Evidence } from '@/types/evidence';
 
 type EvidenceType = 'physical' | 'digital' | 'testimonial';
 
+const formatFileSize = (bytes: number) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = bytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size >= 10 || unitIndex === 0 ? Math.round(size) : size.toFixed(1)} ${units[unitIndex]}`;
+};
+
+const getFileLabel = (resourceType: string, format?: string) =>
+  `${resourceType || 'file'}${format ? `.${format}` : ''}`;
+
+const isPreviewable = (resourceType: string, format?: string) => {
+  const normalizedType = (resourceType || '').toLowerCase();
+  const normalizedFormat = (format || '').toLowerCase();
+  return (
+    normalizedType === 'image' ||
+    normalizedType === 'video' ||
+    normalizedFormat === 'pdf'
+  );
+};
+
+const isImageFile = (resourceType: string) => (resourceType || '').toLowerCase() === 'image';
+const isVideoFile = (resourceType: string) => (resourceType || '').toLowerCase() === 'video';
+const isPdfFile = (format?: string) => (format || '').toLowerCase() === 'pdf';
+
+const EVIDENCE_TEMPLATES = {
+  violent: {
+    physical:
+      'Item Description: 9mm spent shell casing recovered at storefront entrance.\n' +
+      'Collection Point: Main entrance, 1.5m from door frame.\n' +
+      'Collection Method: Photographed in place, bagged, labeled, and sealed.\n' +
+      'Condition: Intact, no visible tampering.\n' +
+      'Chain-of-Custody Start: Collected by duty investigator and transferred to evidence locker.',
+    digital:
+      'Source: CCTV export from storefront camera (Channel 2).\n' +
+      'Coverage Window: 2026-05-05 18:30 to 19:00.\n' +
+      'Observed Content: Two masked suspects approaching and fleeing on motorcycle.\n' +
+      'Integrity Check: SHA-256 hash recorded before upload.\n' +
+      'Storage: Uploaded to secure evidence repository and tagged to case.',
+    testimonial:
+      'Witness: Market security guard on evening duty.\n' +
+      'Statement Time: 2026-05-05 20:15.\n' +
+      'Key Observations: Heard gunshot, saw two suspects heading east exit.\n' +
+      'Reliability Notes: Direct line of sight, no known relationship with victim.\n' +
+      'Follow-up: Re-interview requested with photo lineup support.',
+  },
+  cyber: {
+    physical:
+      'Item Description: Seized laptop used for unauthorized transfer instruction.\n' +
+      'Collection Point: Finance manager workstation, desk station F-12.\n' +
+      'Collection Method: Device photographed, powered down, bagged with tamper seal.\n' +
+      'Condition: Device intact, ports and storage documented.\n' +
+      'Chain-of-Custody Start: Handover to digital forensics team logged.',
+    digital:
+      'Source: Email gateway and SIEM export related to spoof campaign.\n' +
+      'Coverage Window: 2026-05-04 22:00 to 2026-05-05 12:00.\n' +
+      'Observed Content: Spoofed sender domain, malicious reply-to, suspicious login IPs.\n' +
+      'Integrity Check: SHA-256 hash recorded; original logs preserved read-only.\n' +
+      'Storage: Uploaded to secure evidence repository with incident tag.',
+    testimonial:
+      'Witness: Finance officer who executed transfer.\n' +
+      'Statement Time: 2026-05-05 13:20.\n' +
+      'Key Observations: Received urgent executive request via email thread.\n' +
+      'Reliability Notes: Primary participant, cross-check against mail headers ongoing.\n' +
+      'Follow-up: Obtain signed statement after forensic timeline review.',
+  },
+} as const;
+
 export default function EvidencePage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
@@ -32,6 +104,7 @@ export default function EvidencePage() {
   const [activeEvidence, setActiveEvidence] = useState<Evidence | null>(null);
 
   const [type, setType] = useState<EvidenceType>('physical');
+  const [templateKind, setTemplateKind] = useState<'violent' | 'cyber'>('violent');
   const [description, setDescription] = useState('');
   const [files, setFiles] = useState<File[]>([]);
 
@@ -43,6 +116,7 @@ export default function EvidencePage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [openPreviews, setOpenPreviews] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!caseId) return;
@@ -173,6 +247,17 @@ export default function EvidencePage() {
     }
   };
 
+  const togglePreview = (publicId: string) => {
+    setOpenPreviews((prev) => ({
+      ...prev,
+      [publicId]: !prev[publicId],
+    }));
+  };
+
+  const applyEvidenceTemplate = () => {
+    setDescription(EVIDENCE_TEMPLATES[templateKind][type]);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -261,17 +346,84 @@ export default function EvidencePage() {
                   {item.files.length === 0 ? (
                     <p className="text-sm text-slate-500">No files attached.</p>
                   ) : (
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {item.files.map((file) => (
-                        <a
+                        <div
                           key={file.publicId}
-                          href={file.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block text-sm text-sky-700 underline underline-offset-2"
+                          className="rounded-md border border-slate-200 bg-slate-50 p-3"
                         >
-                          {file.resourceType}/{file.format || 'unknown'} ({Math.ceil(file.size / 1024)} KB)
-                        </a>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-medium text-slate-900">
+                                {getFileLabel(file.resourceType, file.format)}
+                              </p>
+                              <p className="text-xs text-slate-600">
+                                {formatFileSize(file.size)} - {file.publicId}
+                              </p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => togglePreview(file.publicId)}
+                                disabled={!isPreviewable(file.resourceType, file.format)}
+                                className="inline-flex h-8 items-center justify-center rounded-md border border-slate-300 px-3 text-xs font-medium text-slate-800 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {isPreviewable(file.resourceType, file.format)
+                                  ? openPreviews[file.publicId]
+                                    ? 'Hide Preview'
+                                    : 'Preview File'
+                                  : 'Not Previewable'}
+                              </button>
+                              <a
+                                href={file.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex h-8 items-center justify-center rounded-md border border-slate-300 px-3 text-xs font-medium text-slate-800 hover:bg-slate-100"
+                              >
+                                Open
+                              </a>
+                              <a
+                                href={file.url}
+                                download
+                                className="inline-flex h-8 items-center justify-center rounded-md border border-slate-300 px-3 text-xs font-medium text-slate-800 hover:bg-slate-100"
+                              >
+                                Download
+                              </a>
+                            </div>
+                          </div>
+                          {openPreviews[file.publicId] && isImageFile(file.resourceType) ? (
+                            <div className="mt-3 overflow-hidden rounded-md border border-slate-200 bg-white">
+                              <img
+                                src={file.url}
+                                alt={getFileLabel(file.resourceType, file.format)}
+                                className="max-h-72 w-full object-contain"
+                                loading="lazy"
+                              />
+                            </div>
+                          ) : null}
+                          {openPreviews[file.publicId] && isVideoFile(file.resourceType) ? (
+                            <div className="mt-3 overflow-hidden rounded-md border border-slate-200 bg-black">
+                              <video controls className="max-h-72 w-full" preload="metadata">
+                                <source src={file.url} />
+                                Your browser does not support this video preview.
+                              </video>
+                            </div>
+                          ) : null}
+                          {openPreviews[file.publicId] && isPdfFile(file.format) ? (
+                            <div className="mt-3 overflow-hidden rounded-md border border-slate-200 bg-white">
+                              <iframe
+                                src={file.url}
+                                title={getFileLabel(file.resourceType, file.format)}
+                                className="h-80 w-full"
+                              />
+                            </div>
+                          ) : null}
+                          {!isPreviewable(file.resourceType, file.format) ? (
+                            <p className="mt-2 text-xs text-slate-500">
+                              This file type may not preview directly in browser.
+                            </p>
+                          ) : null}
+                        </div>
                       ))}
                     </div>
                   )}
@@ -333,6 +485,26 @@ export default function EvidencePage() {
               <CardTitle>Add Evidence</CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm text-slate-700">
+                  Use a structured template to capture clear chain-of-custody and evidence context.
+                </p>
+                <div className="mt-2">
+                  <Label htmlFor="evidenceTemplateKind">Template Type</Label>
+                  <select
+                    id="evidenceTemplateKind"
+                    value={templateKind}
+                    onChange={(event) => setTemplateKind(event.target.value as 'violent' | 'cyber')}
+                    className="mt-1 flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="violent">Violent Crime Template</option>
+                    <option value="cyber">Cyber/Fraud Template</option>
+                  </select>
+                </div>
+                <Button type="button" variant="outline" className="mt-2" onClick={applyEvidenceTemplate}>
+                  Use Evidence Template
+                </Button>
+              </div>
               <form onSubmit={onCreateEvidence} className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="type">Type</Label>
@@ -359,6 +531,18 @@ export default function EvidencePage() {
                     multiple
                     onChange={(event) => setFiles(Array.from(event.target.files || []))}
                   />
+                  {files.length > 0 ? (
+                    <div className="space-y-1 rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Files Ready For Upload</p>
+                      {files.map((file) => (
+                        <p key={`${file.name}-${file.lastModified}`} className="text-sm text-slate-700">
+                          {file.name} - {formatFileSize(file.size)}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">No file selected yet.</p>
+                  )}
                 </div>
                 {actionError ? <p className="md:col-span-2 text-sm text-rose-600">{actionError}</p> : null}
                 <div className="md:col-span-2 flex justify-end gap-2">
@@ -419,6 +603,18 @@ export default function EvidencePage() {
                     multiple
                     onChange={(event) => setUpdateFiles(Array.from(event.target.files || []))}
                   />
+                  {updateFiles.length > 0 ? (
+                    <div className="space-y-1 rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Files Ready For Upload</p>
+                      {updateFiles.map((file) => (
+                        <p key={`${file.name}-${file.lastModified}`} className="text-sm text-slate-700">
+                          {file.name} - {formatFileSize(file.size)}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">No new file selected.</p>
+                  )}
                 </div>
                 {actionError ? <p className="md:col-span-2 text-sm text-rose-600">{actionError}</p> : null}
                 <div className="md:col-span-2 flex justify-end gap-2">

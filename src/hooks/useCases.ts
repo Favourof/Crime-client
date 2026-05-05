@@ -40,6 +40,44 @@ type CaseResponse = {
   data: RawCase;
 };
 
+type RawAuditActor = {
+  _id?: string;
+  id?: string;
+  name?: string;
+  email?: string;
+  role?: string;
+} | null;
+
+type RawAuditEvent = {
+  _id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  actorId?: RawAuditActor;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+};
+
+type CaseAuditResponse = {
+  message: string;
+  data: RawAuditEvent[];
+};
+
+export type CaseAuditEvent = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  actor: {
+    id: string;
+    name: string;
+    email?: string;
+    role?: string;
+  } | null;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+};
+
 type FetchCasesParams = {
   page?: number;
   limit?: number;
@@ -97,6 +135,23 @@ const mapCase = (item: RawCase): Case => ({
   assignedTo: item.assignedTo ? normalizeUserRef(item.assignedTo) : null,
   createdAt: item.createdAt,
   updatedAt: item.updatedAt,
+});
+
+const mapAuditEvent = (item: RawAuditEvent): CaseAuditEvent => ({
+  id: item._id,
+  action: item.action,
+  entityType: item.entityType,
+  entityId: item.entityId,
+  actor: item.actorId
+    ? {
+        id: item.actorId.id || item.actorId._id || '',
+        name: item.actorId.name || 'Unknown user',
+        email: item.actorId.email,
+        role: item.actorId.role,
+      }
+    : null,
+  metadata: item.metadata,
+  createdAt: item.createdAt,
 });
 
 export const useCases = () => {
@@ -161,6 +216,11 @@ export const useCases = () => {
     return mapCase(response.data);
   }, []);
 
+  const getCaseAudit = useCallback(async (id: string, limit = 10) => {
+    const response = await api.get<CaseAuditResponse>(`/cases/${id}/audit?limit=${limit}`);
+    return response.data.map(mapAuditEvent);
+  }, []);
+
   return {
     cases,
     loading,
@@ -172,5 +232,6 @@ export const useCases = () => {
     updateCase,
     changeCaseStatus,
     assignInvestigator,
+    getCaseAudit,
   };
 };

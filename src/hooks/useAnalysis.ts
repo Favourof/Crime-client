@@ -45,6 +45,13 @@ type RunAnalysisResponse = {
   };
 };
 
+type PreviewPromptResponse = {
+  message: string;
+  data: {
+    prompt: string;
+  };
+};
+
 const normalizeUser = (user: RawUserRef): AnalysisUserRef => {
   if (typeof user === 'string') {
     return { id: user, name: 'Unknown analyst' };
@@ -94,11 +101,38 @@ export const useAnalysis = () => {
     return mapAnalysis(response.data.analysis);
   }, []);
 
+  const previewPrompt = useCallback(async (caseId: string) => {
+    const response = await api.get<PreviewPromptResponse>(`/analysis/case/${caseId}/preview`);
+    return response.data.prompt;
+  }, []);
+
+  const saveAnalysis = useCallback(
+    async (
+      caseId: string,
+      payload: {
+        analysis: {
+          patterns: string[];
+          insights: string[];
+          recommendations: string[];
+          confidence: 'low' | 'medium' | 'high';
+        };
+        provider?: string;
+        model?: string;
+      }
+    ) => {
+      const response = await api.post<RunAnalysisResponse>(`/analysis/case/${caseId}`, payload);
+      return mapAnalysis(response.data.analysis);
+    },
+    []
+  );
+
   return {
     analyses,
     loading,
     error,
     fetchAnalysisHistory,
     runAnalysis,
+    previewPrompt,
+    saveAnalysis,
   };
 };

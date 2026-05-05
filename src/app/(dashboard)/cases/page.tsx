@@ -16,6 +16,35 @@ import { useCases } from '@/hooks/useCases';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { CaseStatus } from '@/types/case';
 
+const CASE_TEMPLATES = {
+  violent: {
+    title: 'Armed Robbery at Central Market',
+    crimeType: 'armed robbery',
+    location: 'Central Market, Lagos Island',
+    description:
+      'Incident Date/Time: 2026-05-05 18:40\n' +
+      'Reporting Officer: Sgt. Ibrahim Musa\n' +
+      'Victim Summary: Store owner reported cash theft at gunpoint.\n' +
+      'Suspect Summary: Two masked suspects on motorcycle, black jacket and red helmet observed.\n' +
+      'Scene Notes: CCTV camera at storefront active; one spent shell casing recovered near entrance.\n' +
+      'Immediate Actions: Scene secured, witness statements collected, CCTV requested, forensics notified.\n' +
+      'Next Steps: Track suspect movement via traffic cameras and process ballistic evidence.',
+  },
+  cyber: {
+    title: 'Business Email Compromise Targeting Finance Unit',
+    crimeType: 'cyber fraud',
+    location: 'Corporate HQ - Marina, Lagos',
+    description:
+      'Incident Date/Time: 2026-05-05 09:10\n' +
+      'Reporting Officer: Insp. Chinedu Okafor\n' +
+      'Victim Summary: Finance team processed unauthorized transfer after spoofed executive email.\n' +
+      'Threat Summary: Domain impersonation and social engineering used to bypass approval chain.\n' +
+      'Technical Indicators: Suspicious sender domain, altered reply-to address, foreign IP login trail.\n' +
+      'Immediate Actions: Payment freeze requested, email logs preserved, endpoint isolation initiated.\n' +
+      'Next Steps: Trace beneficiary account, correlate SIEM events, pursue takedown of spoof domain.',
+  },
+} as const;
+
 export default function CasesPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -27,6 +56,7 @@ export default function CasesPage() {
   const [newCrimeType, setNewCrimeType] = useState('');
   const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
+  const [templateKind, setTemplateKind] = useState<'violent' | 'cyber'>('violent');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -88,6 +118,14 @@ export default function CasesPage() {
     }
   };
 
+  const applyStructuredTemplate = () => {
+    const selected = CASE_TEMPLATES[templateKind];
+    setTitle(selected.title);
+    setNewCrimeType(selected.crimeType);
+    setLocation(selected.location);
+    setDescription(selected.description);
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -117,6 +155,26 @@ export default function CasesPage() {
               <CardTitle className="text-base">Create Case</CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm text-slate-700">
+                  Use a structured template to create a complete, investigation-ready case file.
+                </p>
+                <div className="mt-2">
+                  <Label htmlFor="caseTemplateKind">Template Type</Label>
+                  <select
+                    id="caseTemplateKind"
+                    value={templateKind}
+                    onChange={(event) => setTemplateKind(event.target.value as 'violent' | 'cyber')}
+                    className="mt-1 flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="violent">Violent Crime Template</option>
+                    <option value="cyber">Cyber/Fraud Template</option>
+                  </select>
+                </div>
+                <Button type="button" variant="outline" className="mt-2" onClick={applyStructuredTemplate}>
+                  Use Structured Case Template
+                </Button>
+              </div>
               <form onSubmit={handleCreateCase} className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 md:col-span-1">
                   <Label htmlFor="title">Title</Label>
